@@ -1,0 +1,228 @@
+__TOC__
+
+= Cocos2d-x 3.1 Lua实现游戏代码更新 =
+
+== 绑定需要的C++辅助函数 ==
+
+因为不同平台的操作目录的函数可能不一样，主要有三个函数：
+
+<pre>createDownloadDir() // 创建下载目录
+deleteDownloadDir() // 删除下载目录
+addSearchPath() // 添加搜索路径
+</pre>
+绑定方法请参考：[http://www.ihunuo.com:8081/index.php/Cocos2d-x_3.1_lua_bindings Cocos2d-x 3.1 lua bindings]
+
+=== lua_assetsmanager_test_sample.h ===
+
+<pre>#ifndef COCOS2DX_COCOS_SCRIPTING_LUA_BINDINGS_LUA_ASSETSMANAGER_TEST_SAMPLE_H
+#define COCOS2DX_COCOS_SCRIPTING_LUA_BINDINGS_LUA_ASSETSMANAGER_TEST_SAMPLE_H
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+#include &quot;tolua++.h&quot;
+#ifdef __cplusplus
+}
+#endif
+
+/**
+ * The apis which are bound in this file are temporary for the assetsmanager test sample.After the completion of some systems like fileutils,these apis will be deprecated 
+ */
+TOLUA_API int register_assetsmanager_test_sample(lua_State* tolua_S);
+
+#endif // #ifndef COCOS2DX_COCOS_SCRIPTING_LUA_BINDINGS_LUA_ASSETSMANAGER_TEST_SAMPLE_H
+
+</pre>
+=== lua_assetsmanager_test_sample.cpp ===
+
+<pre>#include &quot;lua_assetsmanager_test_sample.h&quot;
+
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+#include  &quot;tolua_fix.h&quot;
+#ifdef __cplusplus
+}
+#endif
+
+#include &quot;cocos2d.h&quot;
+#include &quot;extensions/cocos-ext.h&quot;
+
+#if (CC_TARGET_PLATFORM != CC_PLATFORM_WIN32)
+#include &lt;dirent.h&gt;
+#include &lt;sys/stat.h&gt;
+#endif
+
+USING_NS_CC;
+USING_NS_CC_EXT;
+
+
+static int lua_cocos2dx_createDownloadDir(lua_State* L)
+{
+    if (nullptr == L)
+        return 0;
+    
+    int argc = lua_gettop(L);
+
+    if (0 == argc)
+    {
+        std::string pathToSave = FileUtils::getInstance()-&gt;getWritablePath();
+        pathToSave += &quot;tmpdir&quot;;
+        
+#if (CC_TARGET_PLATFORM != CC_PLATFORM_WIN32)
+        DIR *pDir = NULL;
+        
+        pDir = opendir (pathToSave.c_str());
+        if (! pDir)
+        {
+            mkdir(pathToSave.c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
+        }
+#else
+        if ((GetFileAttributesA(pathToSave.c_str())) == INVALID_FILE_ATTRIBUTES)
+        {
+            CreateDirectoryA(pathToSave.c_str(), 0);
+        }
+#endif
+        tolua_pushstring(L, pathToSave.c_str());
+        return 1;
+    }
+    
+    CCLOG(&quot;'createDownloadDir' function wrong number of arguments: %d, was expecting %d\n&quot;, argc, 0);
+    return 0;
+}
+
+static int lua_cocos2dx_deleteDownloadDir(lua_State* L)
+{
+    if (nullptr == L)
+        return 0;
+    
+    int argc = lua_gettop(L);
+    
+#if COCOS2D_DEBUG &gt;= 1
+    tolua_Error tolua_err;
+#endif
+    
+    if (1 == argc)
+    {
+#if COCOS2D_DEBUG &gt;= 1
+        if (!tolua_isstring(L, 1, 0, &amp;tolua_err)) goto tolua_lerror;
+#endif
+        std::string pathToSave = tolua_tostring(L, 1, &quot;&quot;);
+        
+#if (CC_TARGET_PLATFORM != CC_PLATFORM_WIN32)
+        std::string command = &quot;rm -r &quot;;
+        // Path may include space.
+        command += &quot;\&quot;&quot; + pathToSave + &quot;\&quot;&quot;;
+        system(command.c_str());
+#else
+        std::string command = &quot;rd /s /q &quot;;
+        // Path may include space.
+        command += &quot;\&quot;&quot; + pathToSave + &quot;\&quot;&quot;;
+        system(command.c_str());
+#endif
+        return 0;
+    }
+    
+    CCLOG(&quot;'resetDownloadDir' function wrong number of arguments: %d, was expecting %d\n&quot;, argc, 1);
+    return 0;
+    
+#if COCOS2D_DEBUG &gt;= 1
+tolua_lerror:
+    tolua_error(L,&quot;#ferror in function 'resetDownloadDir'.&quot;,&amp;tolua_err);
+    return 0;
+#endif
+}
+
+static int lua_cocos2dx_addSearchPath(lua_State* L)
+{
+    if (nullptr == L)
+        return 0;
+    
+    int argc = lua_gettop(L);
+    
+#if COCOS2D_DEBUG &gt;= 1
+    tolua_Error tolua_err;
+#endif
+    
+    
+    if (2 == argc)
+    {
+#if COCOS2D_DEBUG &gt;= 1
+        if (!tolua_isstring(L, 1, 0, &amp;tolua_err) ||
+            !tolua_isboolean(L, 2, 0, &amp;tolua_err))
+            goto tolua_lerror;
+#endif
+        std::string pathToSave = tolua_tostring(L, 1, &quot;&quot;);
+        bool before           = tolua_toboolean(L, 2, 0);
+        std::vector&lt;std::string&gt; searchPaths = FileUtils::getInstance()-&gt;getSearchPaths();
+        if (before)
+        {
+            searchPaths.insert(searchPaths.begin(), pathToSave);
+        }
+        else
+        {
+            searchPaths.push_back(pathToSave);
+        }
+        
+        FileUtils::getInstance()-&gt;setSearchPaths(searchPaths);
+        
+        return 0;
+    }
+    CCLOG(&quot;'addSearchPath' function wrong number of arguments: %d, was expecting %d\n&quot;, argc, 2);
+    return 0;
+
+#if COCOS2D_DEBUG &gt;= 1
+tolua_lerror:
+    tolua_error(L,&quot;#ferror in function 'addSearchPath'.&quot;,&amp;tolua_err);
+    return 0;
+#endif
+}
+
+int register_assetsmanager_test_sample(lua_State* L)
+{
+    tolua_open(L);
+    tolua_module(L, NULL, 0);
+    tolua_beginmodule(L, NULL);
+    tolua_function(L, &quot;createDownloadDir&quot;, lua_cocos2dx_createDownloadDir);
+    tolua_function(L, &quot;deleteDownloadDir&quot;, lua_cocos2dx_deleteDownloadDir);
+    tolua_function(L, &quot;addSearchPath&quot;, lua_cocos2dx_addSearchPath);
+    tolua_endmodule(L);
+    return 0;
+}
+</pre>
+== 使用AssertManager检查和更新文件 ==
+
+=== 初始化 ===
+
+<pre>local pathToSave = createDownloadDir()
+assetsManager = cc.AssetsManager:new(&quot;http://192.168.0.105:8080/package.zip&quot;,
+                &quot;http://192.168.0.105:8080/version&quot;,
+                pathToSave)
+assetsManager:retain()
+assetsManager:setDelegate(onError, cc.ASSETSMANAGER_PROTOCOL_ERROR )
+assetsManager:setDelegate(onProgress, cc.ASSETSMANAGER_PROTOCOL_PROGRESS)
+assetsManager:setDelegate(onSuccess, cc.ASSETSMANAGER_PROTOCOL_SUCCESS )
+assetsManager:setConnectionTimeout(3)</pre>
+=== 处理函数 ===
+
+<pre>local function onError(errorCode)
+    if errorCode == cc.ASSETSMANAGER_NO_NEW_VERSION then
+        self.layer.processLabel:setString(&quot;no new version&quot;)
+    elseif errorCode == cc.ASSETSMANAGER_NETWORK then
+        self.layer.processLabel:setString(&quot;network error&quot;)
+    end
+end
+
+local function onProgress( percent )
+    self.layer.processLabel:setString(string.format(&quot;downloading %d%%&quot;,percent))
+end
+
+local function onSuccess()
+    self.layer.processLabel:setString(&quot;Download ok!&quot;)
+end</pre>
+=== 设置搜索路径 ===
+
+<pre>addSearchPath(pathToSave .. &quot;/package&quot;, true)
+addSearchPath(pathToSave .. &quot;/package/res&quot;, true)
+addSearchPath(pathToSave .. &quot;/package/src&quot;, true)
+addSearchPath(pathToSave .. &quot;/package/res/hd&quot;, true)</pre>
